@@ -7,6 +7,15 @@ import x3d          # Faz a leitura do arquivo X3D, gera o grafo de cena e faz t
 import interface    # Janela de visualização baseada no Matplotlib
 import gpu          # Simula os recursos de uma GPU
 
+import numpy as np
+
+
+PILHA_TRANSFORM = [np.identity(4)]
+
+LARGURA = 900
+ALTURA = 900
+
+
 def polypoint2D(point, color):
     """ Função usada para renderizar Polypoint2D. """
     # Converte o esquema de cores
@@ -79,7 +88,7 @@ def polyline2D(lineSegments, color):
 def triangleSet2D(vertices, color):
     """ Função usada para renderizar TriangleSet2D. """
     # Taxa de Supersampling
-    supersample = 10
+    supersample = 3
 
     # Salva os valores originais dos vertices
     y0_orig = vertices[0]
@@ -106,10 +115,10 @@ def triangleSet2D(vertices, color):
     lista_miniPixels = []
 
     # Verifica para cada pixel dentro do quadrado que contem o triangulo, se deve desenha-lo
-    # calc0,calc1,calc2 
+    # calc0,calc1,calc2
     for v in range(y_min-1, y_max+1):
         for u in range(x_min-1, x_max+1):
-            
+
             calc1 = (y1-y2)*(u+0.5) + (x2-x1)*(v+0.5) + (x1*y2 - x2*y1)
             if((y1-y2)*(x0) + (x2-x1)*(y0) + (x1*y2 - x2*y1) < 0):
                 calc1 *= -1
@@ -117,15 +126,15 @@ def triangleSet2D(vertices, color):
             if(calc1 >= 0):
                 calc2 = (y0-y2)*(u+0.5) + (x2-x0)*(v+0.5) + (x0*y2 - x2*y0)
                 if((y0-y2)*(x1) + (x2-x0)*(y1) + (x0*y2 - x2*y0) < 0):
-                    calc2*=-1
+                    calc2 *= -1
                 if(calc2 > 0):
 
                     calc3 = (y1-y0)*(u+0.5) + (x0-x1)*(v+0.5) + (x1*y0 - x0*y1)
                     if((y1-y0)*(x2) + (x0-x1)*(y2) + (x1*y0 - x0*y1) < 0):
                         calc3 *= -1
-                    if(calc3>=0):
-                        lista_miniPixels.append([u,v])
-    
+                    if(calc3 >= 0):
+                        lista_miniPixels.append([u, v])
+
     x_min = round(min(x0_orig, x1_orig, x2_orig))
     x_max = round(max(x0_orig, x1_orig, x2_orig))
     y_min = round(min(y0_orig, y1_orig, y2_orig))
@@ -133,26 +142,50 @@ def triangleSet2D(vertices, color):
 
     for v in range(y_min-1, y_max+1):
         for u in range(x_min-1, x_max+1):
-            intensity = sum(1 for i in lista_miniPixels if (i[0]//supersample == u and i[1]//supersample == v))/(supersample**2)
+            intensity = sum(1 for i in lista_miniPixels if (
+                i[0]//supersample == u and i[1]//supersample == v))/(supersample**2)
             # altera um pixel da imagem
-            
-            if(intensity>0):
+
+            if(intensity > 0):
                 gpu.GPU.set_pixel(
                     v, u, 255*color[0]*intensity, 255*color[1]*intensity, 255*color[2]*intensity)
+
 
 def triangleSet(point, color):
     """ Função usada para renderizar TriangleSet. """
     # Nessa função você receberá pontos no parâmetro point, esses pontos são uma lista
     # de pontos x, y, e z sempre na ordem. Assim point[0] é o valor da coordenada x do
-    # primeiro ponto, point[1] o valor y do primeiro ponto, point[2] o valor z da 
+    # primeiro ponto, point[1] o valor y do primeiro ponto, point[2] o valor z da
     # coordenada z do primeiro ponto. Já point[3] é a coordenada x do segundo ponto e
     # assim por diante.
     # No TriangleSet os triângulos são informados individualmente, assim os três
     # primeiros pontos definem um triângulo, os três próximos pontos definem um novo
     # triângulo, e assim por diante.
-    
+
     # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("TriangleSet : pontos = {0}".format(point)) # imprime no terminal pontos
+    # imprime no terminal pontos
+
+    for i in range(0, len(point), 9):
+        tmp_v1 = np.array([point[i], point[i+1], point[i+2], 1]).T
+        tmp_v2 = np.array([point[i+3], point[i+4], point[i+5], 1]).T
+        tmp_v3 = np.array([point[i+6], point[i+7], point[i+8], 1]).T
+
+        v1 = np.dot(PILHA_TRANSFORM[-1], tmp_v1)
+        v2 = np.dot(PILHA_TRANSFORM[-1], tmp_v2)
+        v3 = np.dot(PILHA_TRANSFORM[-1], tmp_v3)
+
+        triang = np.array([v1/np.sqrt(np.sum(v1**2)), v2/np.sqrt(np.sum(v2**2)), v3/np.sqrt(np.sum(v3**2))]).T
+
+
+        conf_tela = np.dot(np.array([[LARGURA/2, 0, 0, LARGURA/2], [0, -ALTURA/2, 0, ALTURA/2], [0, 0, 1, 0],[0, 0, 0, 1]]) , triang).T
+
+        points = []
+        points.extend(conf_tela[0][:2])
+        points.extend(conf_tela[1][:2])
+        points.extend(conf_tela[2][:2])
+        
+        triangleSet2D(points, color)
+
 
 def viewpoint(position, orientation, fieldOfView):
     """ Função usada para renderizar (na verdade coletar os dados) de Viewpoint. """
@@ -160,8 +193,31 @@ def viewpoint(position, orientation, fieldOfView):
     # câmera virtual. Use esses dados para poder calcular e criar a matriz de projeção
     # perspectiva para poder aplicar nos pontos dos objetos geométricos.
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("Viewpoint : position = {0}, orientation = {1}, fieldOfView = {2}".format(position, orientation, fieldOfView)) # imprime no terminal
+    if(orientation[0]):
+        or_mat = np.array(
+            [[1, 0, 0, 0], [0, np.cos(orientation[-1]), -np.sin(orientation[-1]), 0], [0, np.sin(orientation[-1]), np.cos(orientation[-1]), 0], [0, 0, 0, 1]])
+    elif(orientation[1]):
+        or_mat = np.array(
+            [[np.cos(orientation[-1]), 0, np.sin(orientation[-1]), 0], [0, 1, 0, 0], [-np.sin(orientation[-1]), 0, np.cos(orientation[-1]), 0], [0, 0, 0, 1]])
+    else:
+        or_mat = np.array(
+            [[np.cos(orientation[-1]), -np.sin(orientation[-1]), 0, 0], [np.sin(orientation[-1]), np.cos(orientation[-1]), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+
+    look_at = np.dot(or_mat, np.array(
+        [[1, 0, 0, -position[0]], [0, 1, 0, -position[1]], [0, 0, 1, -position[2]], [0, 0, 0, 1]]))
+    PILHA_TRANSFORM.append(np.dot(look_at, PILHA_TRANSFORM[-1]))
+
+    aspect = LARGURA/ALTURA
+    near = 0.5
+    top = near * np.tan(fieldOfView)
+    far = 200
+    right = top * aspect
+
+    perspective = np.array([[near/right, 0, 0, 0], [0, near/top, 0, 0], [
+        0, 0, -(far+near)/(far-near), -(2*far*near)/(far-near)], [0, 0, -1, 0]])
+
+    PILHA_TRANSFORM.append(np.dot(perspective, PILHA_TRANSFORM[-1]))
+
 
 def transform(translation, scale, rotation):
     """ Função usada para renderizar (na verdade coletar os dados) de Transform. """
@@ -174,14 +230,34 @@ def transform(translation, scale, rotation):
     # modelos do mundo em alguma estrutura de pilha.
 
     # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("Transform : ", end = '')
-    if translation:
-        print("translation = {0} ".format(translation), end = '') # imprime no terminal
-    if scale:
-        print("scale = {0} ".format(scale), end = '') # imprime no terminal
-    if rotation:
-        print("rotation = {0} ".format(rotation), end = '') # imprime no terminal
-    print("")
+    if rotation[0]:
+        rotat = np.array([[1, 0, 0, 0],
+                          [0, np.cos(rotation[3]), -np.sin(rotation[3]), 0],
+                          [0, np.sin(rotation[3]), np.cos(rotation[3]), 0],
+                          [0, 0, 0, 1]])
+    elif rotation[1]:
+        rotat = np.array([[np.cos(rotation[3]), 0, np.sin(rotation[3]), 0],
+                          [0, 1, 0, 0],
+                          [-np.sin(rotation[3]), 0, np.cos(rotation[3]), 0],
+                          [0, 0, 0, 1]])
+    else:
+        rotat = np.array([[np.cos(rotation[3]), -np.sin(rotation[3]), 0, 0],
+                          [np.sin(rotation[3]), np.cos(rotation[3]), 0, 0],
+                          [0, 0, 1, 0],
+                          [0, 0, 0, 1]])
+
+    transla = np.array([[1, 0, 0, translation[0]],
+                        [0, 1, 0, translation[1]],
+                        [0, 0, 1, translation[2]],
+                        [0, 0, 0, 1]])
+    scala = np.array([[scale[0], 0, 0, 0],
+                      [0, scale[1], 0, 0],
+                      [0, 0, scale[2], 0],
+                      [0, 0, 0, 1]])
+
+    PILHA_TRANSFORM.append(
+        np.dot(PILHA_TRANSFORM[-1], np.dot(np.dot(transla, scala), rotat)))
+
 
 def _transform():
     """ Função usada para renderizar (na verdade coletar os dados) de Transform. """
@@ -189,9 +265,8 @@ def _transform():
     # grafo de cena. Não são passados valores, porém quando se sai de um nó transform se
     # deverá recuperar a matriz de transformação dos modelos do mundo da estrutura de
     # pilha implementada.
+    PILHA_TRANSFORM.pop()
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("Saindo de Transform")
 
 def triangleStripSet(point, stripCount, color):
     """ Função usada para renderizar TriangleStripSet. """
@@ -204,10 +279,17 @@ def triangleStripSet(point, stripCount, color):
     # em uma lista chamada stripCount (perceba que é uma lista).
 
     # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("TriangleStripSet : pontos = {0} ".format(point), end = '') # imprime no terminal pontos
-    for i, strip in enumerate(stripCount):
-        print("strip[{0}] = {1} ".format(i, strip), end = '') # imprime no terminal
-    print("")
+    triangs = []
+    for i in range(int(stripCount[0])-2):
+        cur = i
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        cur = i+1
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        cur = i+2
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+      
+    triangleSet(triangs, color)
+
 
 def indexedTriangleStripSet(point, index, color):
     """ Função usada para renderizar IndexedTriangleStripSet. """
@@ -221,9 +303,16 @@ def indexedTriangleStripSet(point, index, color):
     # acabou. A ordem de conexão será de 3 em 3 pulando um índice. Por exemplo: o
     # primeiro triângulo será com os vértices 0, 1 e 2, depois serão os vértices 1, 2 e 3,
     # depois 2, 3 e 4, e assim por diante.
-    
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("IndexedTriangleStripSet : pontos = {0}, index = {1}".format(point, index)) # imprime no terminal pontos
+    triangs = []
+    for i in range(len(index)-3):
+        cur = int(index[int(i)])
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        cur = int(index[int(i)+1])
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        cur = int(index[int(i)+2])
+        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+      
+    triangleSet(triangs, color)
 
 def box(size, color):
     """ Função usada para renderizar Boxes. """
@@ -235,11 +324,73 @@ def box(size, color):
     # encontre os vértices e defina os triângulos.
 
     # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("Box : size = {0}".format(size)) # imprime no terminal pontos
+    print("Box : size = {0}".format(size))  # imprime no terminal pontos
 
+    x = size[0]/2
+    y = size[1]/2
+    z = size[2]/2
 
-LARGURA = 30
-ALTURA = 20
+    triangs = []
+
+    # z positivo fixo
+    triangs.extend([-x , y , z ])
+    triangs.extend([-x ,-y , z ])
+    triangs.extend([ x , y , z ])
+    
+    triangs.extend([ x ,-y , z ])
+    triangs.extend([-x ,-y , z ])
+    triangs.extend([ x , y , z ])
+
+    # z negativo fixo
+    triangs.extend([-x , y ,-z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([ x , y ,-z ])
+    
+    triangs.extend([ x ,-y ,-z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([ x , y ,-z ])
+
+    # y positivo fixo
+    triangs.extend([-x , y , z ])
+    triangs.extend([-x , y ,-z ])
+    triangs.extend([ x , y , z ])
+    
+    triangs.extend([ x , y , z ])
+    triangs.extend([-x , y ,-z ])
+    triangs.extend([ x , y ,-z ])
+
+    # y negativo fixo
+    triangs.extend([-x ,-y , z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([ x ,-y , z ])
+    
+    triangs.extend([ x ,-y , z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([ x ,-y ,-z ])
+
+    # x positivo fixo
+    triangs.extend([ x , y , z ])
+    triangs.extend([ x ,-y ,-z ])
+    triangs.extend([ x , y ,-z ])
+    
+    triangs.extend([ x , y , z ])
+    triangs.extend([ x ,-y ,-z ])
+    triangs.extend([ x ,-y , z ])
+
+    # x negativo fixo
+    triangs.extend([-x , y , z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([-x , y ,-z ])
+    
+    triangs.extend([-x , y , z ])
+    triangs.extend([-x ,-y ,-z ])
+    triangs.extend([-x ,-y , z ])
+
+    triangleSet(triangs, color)
+    
+    
+    
+
 
 if __name__ == '__main__':
 
@@ -250,17 +401,23 @@ if __name__ == '__main__':
     image_file = "tela.png"
 
     # Tratando entrada de parâmetro
-    parser = argparse.ArgumentParser(add_help=False)   # parser para linha de comando
+    # parser para linha de comando
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("-i", "--input", help="arquivo X3D de entrada")
     parser.add_argument("-o", "--output", help="arquivo 2D de saída (imagem)")
     parser.add_argument("-w", "--width", help="resolução horizonta", type=int)
     parser.add_argument("-h", "--height", help="resolução vertical", type=int)
-    parser.add_argument("-q", "--quiet", help="não exibe janela de visualização", action='store_true')
-    args = parser.parse_args() # parse the arguments
-    if args.input: x3d_file = args.input
-    if args.output: image_file = args.output
-    if args.width: width = args.width
-    if args.height: height = args.height
+    parser.add_argument(
+        "-q", "--quiet", help="não exibe janela de visualização", action='store_true')
+    args = parser.parse_args()  # parse the arguments
+    if args.input:
+        x3d_file = args.input
+    if args.output:
+        image_file = args.output
+    if args.width:
+        width = args.width
+    if args.height:
+        height = args.height
 
     # Iniciando simulação de GPU
     gpu.GPU(width, height, image_file)
@@ -286,11 +443,11 @@ if __name__ == '__main__':
         window = interface.Interface(width, height)
         scene.set_preview(window)
 
-    scene.parse() # faz o traversal no grafo de cena
+    scene.parse()  # faz o traversal no grafo de cena
 
     # Se no modo silencioso salvar imagem e não mostrar janela de visualização
     if args.quiet:
-        gpu.GPU.save_image() # Salva imagem em arquivo
+        gpu.GPU.save_image()  # Salva imagem em arquivo
     else:
-        window.image_saver = gpu.GPU.save_image # pasa a função para salvar imagens
-        window.preview(gpu.GPU._frame_buffer) # mostra janela de visualização
+        window.image_saver = gpu.GPU.save_image  # pasa a função para salvar imagens
+        window.preview(gpu.GPU._frame_buffer)  # mostra janela de visualização
