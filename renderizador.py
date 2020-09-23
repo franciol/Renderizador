@@ -9,9 +9,10 @@ import gpu          # Simula os recursos de uma GPU
 
 import numpy as np
 
-
+# PILHA de transformações
 PILHA_TRANSFORM = [np.identity(4)]
 
+# Dimensoes tela
 LARGURA = 900
 ALTURA = 900
 
@@ -162,28 +163,32 @@ def triangleSet(point, color):
     # primeiros pontos definem um triângulo, os três próximos pontos definem um novo
     # triângulo, e assim por diante.
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    # imprime no terminal pontos
-
+    # For itera por cada triangulo
     for i in range(0, len(point), 9):
         tmp_v1 = np.array([point[i], point[i+1], point[i+2], 1]).T
         tmp_v2 = np.array([point[i+3], point[i+4], point[i+5], 1]).T
         tmp_v3 = np.array([point[i+6], point[i+7], point[i+8], 1]).T
 
+        # Pontos dos triangulos ja posicionados em relacao á ultima transformação
         v1 = np.dot(PILHA_TRANSFORM[-1], tmp_v1)
         v2 = np.dot(PILHA_TRANSFORM[-1], tmp_v2)
         v3 = np.dot(PILHA_TRANSFORM[-1], tmp_v3)
 
-        triang = np.array([v1/np.sqrt(np.sum(v1**2)), v2/np.sqrt(np.sum(v2**2)), v3/np.sqrt(np.sum(v3**2))]).T
+        # Matriz do triangulo já normalizada
+        triang = np.array([v1/np.sqrt(np.sum(v1**2)), v2 /
+                           np.sqrt(np.sum(v2**2)), v3/np.sqrt(np.sum(v3**2))]).T
 
+        # transformação para coordenadas da tela
+        conf_tela = np.dot(np.array(
+            [[LARGURA/2, 0, 0, LARGURA/2], [0, -ALTURA/2, 0, ALTURA/2], [0, 0, 1, 0], [0, 0, 0, 1]]), triang).T
 
-        conf_tela = np.dot(np.array([[LARGURA/2, 0, 0, LARGURA/2], [0, -ALTURA/2, 0, ALTURA/2], [0, 0, 1, 0],[0, 0, 0, 1]]) , triang).T
-
+        # Geração dos pontos 2D a desenhar
         points = []
         points.extend(conf_tela[0][:2])
         points.extend(conf_tela[1][:2])
         points.extend(conf_tela[2][:2])
-        
+
+        # Envio para a função de Desenho
         triangleSet2D(points, color)
 
 
@@ -192,7 +197,7 @@ def viewpoint(position, orientation, fieldOfView):
     # Na função de viewpoint você receberá a posição, orientação e campo de visão da
     # câmera virtual. Use esses dados para poder calcular e criar a matriz de projeção
     # perspectiva para poder aplicar nos pontos dos objetos geométricos.
-
+    # Verifica que a orientação
     if(orientation[0]):
         or_mat = np.array(
             [[1, 0, 0, 0], [0, np.cos(orientation[-1]), -np.sin(orientation[-1]), 0], [0, np.sin(orientation[-1]), np.cos(orientation[-1]), 0], [0, 0, 0, 1]])
@@ -203,10 +208,14 @@ def viewpoint(position, orientation, fieldOfView):
         or_mat = np.array(
             [[np.cos(orientation[-1]), -np.sin(orientation[-1]), 0, 0], [np.sin(orientation[-1]), np.cos(orientation[-1]), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
 
+    # Matriz Look At
     look_at = np.dot(or_mat, np.array(
         [[1, 0, 0, -position[0]], [0, 1, 0, -position[1]], [0, 0, 1, -position[2]], [0, 0, 0, 1]]))
+
+    # Adição da transformação á pilha
     PILHA_TRANSFORM.append(np.dot(look_at, PILHA_TRANSFORM[-1]))
 
+    # Matriz de Perspectiva
     aspect = LARGURA/ALTURA
     near = 0.5
     top = near * np.tan(fieldOfView)
@@ -216,6 +225,7 @@ def viewpoint(position, orientation, fieldOfView):
     perspective = np.array([[near/right, 0, 0, 0], [0, near/top, 0, 0], [
         0, 0, -(far+near)/(far-near), -(2*far*near)/(far-near)], [0, 0, -1, 0]])
 
+    # Adição da transformação á pilha
     PILHA_TRANSFORM.append(np.dot(perspective, PILHA_TRANSFORM[-1]))
 
 
@@ -229,32 +239,26 @@ def transform(translation, scale, rotation):
     # Quando se entrar em um nó transform se deverá salvar a matriz de transformação dos
     # modelos do mundo em alguma estrutura de pilha.
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
+    # Matriz de rotação
     if rotation[0]:
-        rotat = np.array([[1, 0, 0, 0],
-                          [0, np.cos(rotation[3]), -np.sin(rotation[3]), 0],
-                          [0, np.sin(rotation[3]), np.cos(rotation[3]), 0],
-                          [0, 0, 0, 1]])
+        rotat = np.array([[1, 0, 0, 0], [0, np.cos(rotation[3]), -np.sin(rotation[3]), 0],
+                          [0, np.sin(rotation[3]), np.cos(rotation[3]), 0], [0, 0, 0, 1]])
     elif rotation[1]:
-        rotat = np.array([[np.cos(rotation[3]), 0, np.sin(rotation[3]), 0],
-                          [0, 1, 0, 0],
-                          [-np.sin(rotation[3]), 0, np.cos(rotation[3]), 0],
-                          [0, 0, 0, 1]])
+        rotat = np.array([[np.cos(rotation[3]), 0, np.sin(rotation[3]), 0], [
+                         0, 1, 0, 0], [-np.sin(rotation[3]), 0, np.cos(rotation[3]), 0], [0, 0, 0, 1]])
     else:
-        rotat = np.array([[np.cos(rotation[3]), -np.sin(rotation[3]), 0, 0],
-                          [np.sin(rotation[3]), np.cos(rotation[3]), 0, 0],
-                          [0, 0, 1, 0],
-                          [0, 0, 0, 1]])
+        rotat = np.array([[np.cos(rotation[3]), -np.sin(rotation[3]), 0, 0], [np.sin(
+            rotation[3]), np.cos(rotation[3]), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
 
-    transla = np.array([[1, 0, 0, translation[0]],
-                        [0, 1, 0, translation[1]],
-                        [0, 0, 1, translation[2]],
-                        [0, 0, 0, 1]])
-    scala = np.array([[scale[0], 0, 0, 0],
-                      [0, scale[1], 0, 0],
-                      [0, 0, scale[2], 0],
-                      [0, 0, 0, 1]])
+    # Matriz de translação
+    transla = np.array([[1, 0, 0, translation[0]], [0, 1, 0, translation[1]], [
+                       0, 0, 1, translation[2]], [0, 0, 0, 1]])
 
+    # Matriz de Escala
+    scala = np.array([[scale[0], 0, 0, 0], [0, scale[1], 0, 0], [
+                     0, 0, scale[2], 0], [0, 0, 0, 1]])
+
+    # Adição da transformação á pilha
     PILHA_TRANSFORM.append(
         np.dot(PILHA_TRANSFORM[-1], np.dot(np.dot(transla, scala), rotat)))
 
@@ -278,16 +282,16 @@ def triangleStripSet(point, stripCount, color):
     # por diante. No TriangleStripSet a quantidade de vértices a serem usados é informado
     # em uma lista chamada stripCount (perceba que é uma lista).
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
+    # Cria a lista de pontos e adiciona todos os pontos da lista 
     triangs = []
     for i in range(int(stripCount[0])-2):
         cur = i
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
         cur = i+1
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
         cur = i+2
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
-      
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
+
     triangleSet(triangs, color)
 
 
@@ -303,16 +307,19 @@ def indexedTriangleStripSet(point, index, color):
     # acabou. A ordem de conexão será de 3 em 3 pulando um índice. Por exemplo: o
     # primeiro triângulo será com os vértices 0, 1 e 2, depois serão os vértices 1, 2 e 3,
     # depois 2, 3 e 4, e assim por diante.
+
+    # Cria a lista de pontos e adiciona todos os pontos da lista 
     triangs = []
     for i in range(len(index)-3):
         cur = int(index[int(i)])
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
         cur = int(index[int(i)+1])
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
         cur = int(index[int(i)+2])
-        triangs.extend([ point[cur*3] , point[3*cur+1] , point[3*cur+2]])
-      
+        triangs.extend([point[cur*3], point[3*cur+1], point[3*cur+2]])
+
     triangleSet(triangs, color)
+
 
 def box(size, color):
     """ Função usada para renderizar Boxes. """
@@ -323,73 +330,72 @@ def box(size, color):
     # essa caixa você vai provavelmente querer tesselar ela em triângulos, para isso
     # encontre os vértices e defina os triângulos.
 
-    # O print abaixo é só para vocês verificarem o funcionamento, deve ser removido.
-    print("Box : size = {0}".format(size))  # imprime no terminal pontos
-
+    # coordenadas positivas da caixa
     x = size[0]/2
     y = size[1]/2
     z = size[2]/2
 
+    # lista de pontos
     triangs = []
 
-    # z positivo fixo
-    triangs.extend([-x , y , z ])
-    triangs.extend([-x ,-y , z ])
-    triangs.extend([ x , y , z ])
-    
-    triangs.extend([ x ,-y , z ])
-    triangs.extend([-x ,-y , z ])
-    triangs.extend([ x , y , z ])
+   
 
     # z negativo fixo
-    triangs.extend([-x , y ,-z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([ x , y ,-z ])
-    
-    triangs.extend([ x ,-y ,-z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([ x , y ,-z ])
+    triangs.extend([-x, y, -z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([x, y, -z])
+
+    triangs.extend([x, -y, -z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([x, y, -z])
 
     # y positivo fixo
-    triangs.extend([-x , y , z ])
-    triangs.extend([-x , y ,-z ])
-    triangs.extend([ x , y , z ])
-    
-    triangs.extend([ x , y , z ])
-    triangs.extend([-x , y ,-z ])
-    triangs.extend([ x , y ,-z ])
+    triangs.extend([-x, y, z])
+    triangs.extend([-x, y, -z])
+    triangs.extend([x, y, z])
+
+    triangs.extend([x, y, z])
+    triangs.extend([-x, y, -z])
+    triangs.extend([x, y, -z])
 
     # y negativo fixo
-    triangs.extend([-x ,-y , z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([ x ,-y , z ])
-    
-    triangs.extend([ x ,-y , z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([ x ,-y ,-z ])
+    triangs.extend([-x, -y, z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([x, -y, z])
+
+    triangs.extend([x, -y, z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([x, -y, -z])
 
     # x positivo fixo
-    triangs.extend([ x , y , z ])
-    triangs.extend([ x ,-y ,-z ])
-    triangs.extend([ x , y ,-z ])
-    
-    triangs.extend([ x , y , z ])
-    triangs.extend([ x ,-y ,-z ])
-    triangs.extend([ x ,-y , z ])
+    triangs.extend([x, y, z])
+    triangs.extend([x, -y, -z])
+    triangs.extend([x, y, -z])
+
+    triangs.extend([x, y, z])
+    triangs.extend([x, -y, -z])
+    triangs.extend([x, -y, z])
 
     # x negativo fixo
-    triangs.extend([-x , y , z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([-x , y ,-z ])
-    
-    triangs.extend([-x , y , z ])
-    triangs.extend([-x ,-y ,-z ])
-    triangs.extend([-x ,-y , z ])
+    triangs.extend([-x, y, z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([-x, y, -z])
 
+    triangs.extend([-x, y, z])
+    triangs.extend([-x, -y, -z])
+    triangs.extend([-x, -y, z])
+
+     # z positivo fixo
+    triangs.extend([-x, y, z])
+    triangs.extend([-x, -y, z])
+    triangs.extend([x, y, z])
+
+    triangs.extend([x, -y, z])
+    triangs.extend([-x, -y, z])
+    triangs.extend([x, y, z])
+
+    # manda os pontos para desenhar
     triangleSet(triangs, color)
-    
-    
-    
 
 
 if __name__ == '__main__':
