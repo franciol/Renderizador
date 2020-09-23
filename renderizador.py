@@ -89,7 +89,7 @@ def polyline2D(lineSegments, color):
 def triangleSet2D(vertices, color):
     """ Função usada para renderizar TriangleSet2D. """
     # Taxa de Supersampling
-    supersample = 3
+    supersample = 2
 
     # Salva os valores originais dos vertices
     y0_orig = vertices[0]
@@ -170,16 +170,16 @@ def triangleSet(point, color):
         tmp_v3 = np.array([point[i+6], point[i+7], point[i+8], 1]).T
 
         # Pontos dos triangulos ja posicionados em relacao á ultima transformação
-        v1 = np.dot(PILHA_TRANSFORM[-1], tmp_v1)
-        v2 = np.dot(PILHA_TRANSFORM[-1], tmp_v2)
-        v3 = np.dot(PILHA_TRANSFORM[-1], tmp_v3)
+        v1 = np.matmul(PILHA_TRANSFORM[-1], tmp_v1)
+        v2 = np.matmul(PILHA_TRANSFORM[-1], tmp_v2)
+        v3 = np.matmul(PILHA_TRANSFORM[-1], tmp_v3)
 
         # Matriz do triangulo já normalizada
         triang = np.array([v1/np.sqrt(np.sum(v1**2)), v2 /
                            np.sqrt(np.sum(v2**2)), v3/np.sqrt(np.sum(v3**2))]).T
 
         # transformação para coordenadas da tela
-        conf_tela = np.dot(np.array(
+        conf_tela = np.matmul(np.array(
             [[LARGURA/2, 0, 0, LARGURA/2], [0, -ALTURA/2, 0, ALTURA/2], [0, 0, 1, 0], [0, 0, 0, 1]]), triang).T
 
         # Geração dos pontos 2D a desenhar
@@ -209,11 +209,11 @@ def viewpoint(position, orientation, fieldOfView):
             [[np.cos(orientation[-1]), -np.sin(orientation[-1]), 0, 0], [np.sin(orientation[-1]), np.cos(orientation[-1]), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
 
     # Matriz Look At
-    look_at = np.dot(or_mat, np.array(
+    look_at = np.matmul(or_mat, np.array(
         [[1, 0, 0, -position[0]], [0, 1, 0, -position[1]], [0, 0, 1, -position[2]], [0, 0, 0, 1]]))
 
     # Adição da transformação á pilha
-    PILHA_TRANSFORM.append(np.dot(look_at, PILHA_TRANSFORM[-1]))
+    PILHA_TRANSFORM.append(np.matmul(look_at, PILHA_TRANSFORM[-1]))
 
     # Matriz de Perspectiva
     aspect = LARGURA/ALTURA
@@ -226,7 +226,7 @@ def viewpoint(position, orientation, fieldOfView):
         0, 0, -(far+near)/(far-near), -(2*far*near)/(far-near)], [0, 0, -1, 0]])
 
     # Adição da transformação á pilha
-    PILHA_TRANSFORM.append(np.dot(perspective, PILHA_TRANSFORM[-1]))
+    PILHA_TRANSFORM.append(np.matmul(perspective, PILHA_TRANSFORM[-1]))
 
 
 def transform(translation, scale, rotation):
@@ -260,7 +260,7 @@ def transform(translation, scale, rotation):
 
     # Adição da transformação á pilha
     PILHA_TRANSFORM.append(
-        np.dot(PILHA_TRANSFORM[-1], np.dot(np.dot(transla, scala), rotat)))
+        np.matmul(PILHA_TRANSFORM[-1], np.matmul(np.matmul(transla, scala), rotat)))
 
 
 def _transform():
